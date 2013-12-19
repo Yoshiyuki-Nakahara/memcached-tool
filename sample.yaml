@@ -1,0 +1,10 @@
+
+servers :
+    - 'localhost:11211'
+namespace          :
+connect_timeout    : 0.2
+io_timeout         : 0.5
+compress_threshold : 500
+compress_ratio     : 0.9
+utf8               : 1
+
