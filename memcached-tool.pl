@@ -147,13 +147,13 @@ sub memcached_print_only_key
         return 0;
     }
 
-    print sprintf( "%18s | %16s | %16s | %16s | %16s \n",
+    print sprintf( "%22s | %16s | %16s | %16s | %16s \n",
                     "Host", "Size", "ExpireTime", "RemainingTime", "Key" );
-    print sprintf( "%18s + %16s + %16s + %16s + %16s \n",
-                    "-"x18, "-"x16, "-"x16, "-"x16, "-"x16 );
+    print sprintf( "%22s + %16s + %16s + %16s + %16s \n",
+                    "-"x22, "-"x16, "-"x16, "-"x16, "-"x16 );
     while ( my ( $host, $item ) = each %{$data} ) {
         while ( my ( $key, $val ) = each %{$item} ) {
-            print sprintf( "%18s | %16d | %16d | %16d | %16s \n",
+            print sprintf( "%22s | %16d | %16d | %16d | %16s \n",
                             $host,
                             $val->{size},
                             $val->{expire_time},
@@ -333,6 +333,12 @@ sub parse_program_option
 
     $program{ 'option' } = $option;
     verbose( "[ parsing program config file ] ..." );
+
+    unless ( $option->{'print-only-key'}
+            || $option->{'export'} || $option->{'import'}
+            || $option->{'stats'} ) {
+        print usage() and exit;
+    }
 
     print usage() and exit if $option->get( 'help' );
 
