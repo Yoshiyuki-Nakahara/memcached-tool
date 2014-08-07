@@ -344,9 +344,9 @@ sub parse_program_option
         'import=s',           # yaml format input
         'stats+',             # print stats
 
-        'host',               # specify host (default: localhost)
-        'port',               # specify port (default: 11211)
-        'namespace',          # memcache key prefix
+        'host=s',             # specify host (default: localhost)
+        'port=i',             # specify port (default: 11211)
+        'namespace=s',        # memcache key prefix
 
         'key=s',              # specify key by regex (optional)
     ) or die usage;
