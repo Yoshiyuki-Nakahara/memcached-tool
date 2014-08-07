@@ -21,20 +21,30 @@ my %program;
 
     verbose( "[ processing main loop ] ... " );
 
-    unless ( defined $config->{servers} ) {
-        print usage() and exit 1;
+    my $memcache_config;
+    if ( defined $option->{'config'} ) {
+        $memcache_config = $config;
     }
-
-    my $memcache = new Cache::Memcached( $config )
+    else {
+        my $host = $option->{'host'};
+        my $port = $option->{'port'};
+        $memcache_config = {
+            'servers'   => [ "$host:$port" ],
+            'namespace' => $option->{'namespace'},
+            'utf8'      => 1,
+        };
+    }
+    # my $memcache = new Cache::Memcached( $config )
+    my $memcache = new Cache::Memcached( $memcache_config )
         or die "Error : memchached connect error\n";
 
-    if ( $option->{'print-only-key'} ) {
-        memcached_print_only_key( $config, $option, $argv, $memcache )
-            or die "Error: failed to memcached_print";
+    if ( $option->{'export-key'} ) {
+        memcached_export_key( $config, $option, $argv, $memcache )
+            or die "Error: failed to memcached_export_key";
     }
     elsif ( $option->{'export'} ) {
         memcached_export( $config, $option, $argv, $memcache )
-            or die "Error: failed to memcached_print";
+            or die "Error: failed to memcached_export";
     }
     elsif ( $option->{'import'} ) {
         memcached_import( $config, $option, $argv, $memcache )
@@ -42,7 +52,7 @@ my %program;
     }
     elsif ( $option->{'stats'} ) {
         memcached_stats( $config, $option, $argv, $memcache )
-            or die "Error: failed to memcached_import";
+            or die "Error: failed to memcached_stats";
     }
 
     $memcache->disconnect_all;
@@ -96,7 +106,7 @@ sub search
                 my $cachedump_text = $cachedump->{hosts}->{$host}->{$cd_cmd};
                 my @lines = split( "\n", $cachedump_text );
                 for my $line ( @lines ) {
-                    verbose( "", "." );
+                    verbose( "", 1, "." );
                     my ( $item, $bytes, $expire_time ) =
                         $line =~ /^ITEM (.+) \[(.+) b; (.+) s\]/;
                     $item =~ s/^($memd->{namespace})// if $memd->{namespace};
@@ -121,6 +131,7 @@ sub search
                         $data->{$host}->{$item}->{expire_remaining} = $remaining_time;
                     }
                 }
+                verbose( "", 1, "\n" );
             }
         }
 
@@ -131,7 +142,7 @@ sub search
 }
 
 
-sub memcached_print_only_key
+sub memcached_export_key
 {
     my ( $config, $option, $argv, $memcache ) = @_;
 
@@ -147,21 +158,17 @@ sub memcached_print_only_key
         return 0;
     }
 
-    print sprintf( "%22s | %16s | %16s | %16s | %16s \n",
-                    "Host", "Size", "ExpireTime", "RemainingTime", "Key" );
-    print sprintf( "%22s + %16s + %16s + %16s + %16s \n",
-                    "-"x22, "-"x16, "-"x16, "-"x16, "-"x16 );
     while ( my ( $host, $item ) = each %{$data} ) {
         while ( my ( $key, $val ) = each %{$item} ) {
-            print sprintf( "%22s | %16d | %16d | %16d | %16s \n",
-                            $host,
-                            $val->{size},
-                            $val->{expire_time},
-                            $val->{expire_remaining},
-                            $key,
-                         );
+            delete $data->{$host}->{$key}->{value};
         }
     }
+
+    local $YAML::Syck::Headless        = 1;
+    local $YAML::Syck::SortKeys        = 1;
+    local $YAML::Syck::ImplicitUnicode = 1;
+    local $YAML::Syck::ImplicitBinary  = 1;
+    print YAML::Syck::Dump $data;
 
     return 1;
 }
@@ -245,6 +252,7 @@ sub usage
     $basename =~ s{\.pl}{}xms;
 
     return $usage . <<"END_USAGE"
+
 Usage:
     perl $basename.pl [options]
 
@@ -252,12 +260,20 @@ Options:        --help    : print usage and exit
              -v|--verbose : print message verbosely
                 --config  : specify config file
 
-         --print-only-key : yaml format output ( option --key is indispensable )
+             --export-key : yaml format output ( option --key is indispensable )
                  --export : yaml format output ( option --key is indispensable )
                  --import : specify yaml format input
-                 --stats  : print stats
+                  --stats : print stats
+
+                   --host : specify host (default: localhost)
+                   --port : specify port (default: 11211)
+              --namespace : memcache key prefix
 
         --key             : specify key by regex (optional)
+
+Example:
+    perl $basename.pl --export-key => export keys at localhost:11211
+
 END_USAGE
 }
 
@@ -266,7 +282,7 @@ sub verbose
 {
     my ( $str, $level, $nl ) = @_;
 
-    $level = 1 unless $level;
+    $level = 0 unless $level;
     $nl = "\n" unless $nl;
 
     local $| = 1;
@@ -323,10 +339,14 @@ sub parse_program_option
         'verbose+',           # print message verbosely
         'config=s',           # specify config file
 
-        'print-only-key+',    # yaml format output ( option --key is indispensable )
+        'export-key+',        # yaml format output ( option --key is indispensable )
         'export+',            # yaml format output ( option --key is indispensable )
         'import=s',           # yaml format input
         'stats+',             # print stats
+
+        'host',               # specify host (default: localhost)
+        'port',               # specify port (default: 11211)
+        'namespace',          # memcache key prefix
 
         'key=s',              # specify key by regex (optional)
     ) or die usage;
@@ -334,11 +354,15 @@ sub parse_program_option
     $program{ 'option' } = $option;
     verbose( "[ parsing program config file ] ..." );
 
-    unless ( $option->{'print-only-key'}
+    unless ( $option->{'export-key'}
             || $option->{'export'} || $option->{'import'}
             || $option->{'stats'} ) {
         print usage() and exit;
     }
+
+    $option->{'host'} = 'localhost' unless defined $option->{'host'};
+    $option->{'port'} = '11211'     unless defined $option->{'port'};
+    $option->{'namespace'} = ''     unless defined $option->{'namespace'};
 
     print usage() and exit if $option->get( 'help' );
 
@@ -360,7 +384,5 @@ sub parse_program_argv
     return @argv;
 }
 
-
 __END__
-
 
