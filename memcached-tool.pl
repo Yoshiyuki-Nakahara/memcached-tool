@@ -124,12 +124,11 @@ sub search
                     #next if $remaining_time < 0;
 
                     # --- get values --- #
-                    if( my $value = $memd->get( $item ) ) {
-                        $data->{$host}->{$item}->{value} = $value;
-                        $data->{$host}->{$item}->{size}  = $bytes;
-                        $data->{$host}->{$item}->{expire_time} = $expire_time;
-                        $data->{$host}->{$item}->{expire_remaining} = $remaining_time;
-                    }
+                    my $value = $memd->get( $item );
+                    $data->{$host}->{$item}->{value} = $value;
+                    $data->{$host}->{$item}->{size}  = $bytes;
+                    $data->{$host}->{$item}->{expire_time} = $expire_time;
+                    $data->{$host}->{$item}->{expire_remaining} = $remaining_time;
                 }
                 verbose( "", 1, "\n" );
             }
