@@ -282,7 +282,7 @@ sub verbose
 {
     my ( $str, $level, $nl ) = @_;
 
-    $level = 0 unless $level;
+    $level = 1 unless $level;
     $nl = "\n" unless $nl;
 
     local $| = 1;
